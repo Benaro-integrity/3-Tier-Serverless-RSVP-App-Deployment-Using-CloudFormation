@@ -1,0 +1,154 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'A CloudFormation template to provision a 3-Tier RSVP Application using RDS, DynamoDb, Lambda, API Gateway, S3 and CloudFront.'
+
+Resources:
+  #Create VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 172.32.0.0/16
+      EnableDnsHostnames: True
+      EnableDnsSupport: True
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: g1-vpc
+  #Create Public subnet 1
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: ap-southeast-1a
+      CidrBlock: 172.32.0.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: G1PublicSubnet-1
+      VpcId: !Ref VPC
+  #Create Public subnet 2
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: ap-southeast-1b
+      CidrBlock: 172.32.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: G1PublicSubnet-2
+      VpcId: !Ref VPC
+  #Create Public subnet 3
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: ap-southeast-1c
+      CidrBlock: 172.32.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: G1PublicSubnet-3
+      VpcId: !Ref VPC
+  #Create Public RT
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: G1PublicRouteTable
+      VpcId: !Ref VPC
+  #Associate RT with Public subnet 1
+  PublicRouteTableAssociation1:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+  #Associate RT with Public subnet 2
+  PublicRouteTableAssociation2:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+  #Associate RT with Public subnet 3
+  PublicRouteTableAssociation3:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet3
+      RouteTableId: !Ref PublicRouteTable
+
+  #Create IG and attach to VPC
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: G1InternetGateway
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  #Security Group
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SG to allow All traffic from our development PC and resources in our SG to communicate with RDS instance
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: G1ProjectSG
+
+  DevPCIngressRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroup
+      # Rule 1 - All Traffic Custom Source IP
+      IpProtocol: -1
+      FromPort: -1
+      ToPort: -1
+      CidrIp: 102.176.65.175/32 #Update to current IP
+      #CidrIp: 0.0.0.0/0 #Allowed all traffic from anywhere to see if we can access the RDS database instance
+      Description: Allow all traffic from our development PC IP inbound rule
+
+  # Rule 2 - MySQL/Aurora from Security Group
+  RDSIngresRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref SecurityGroup
+      Description: MySQL Aurora from security group
+  # RDS DB Subnet Group (Defines which subnets the database can use across Availability Zones)
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for G1 project RDS instance
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3
+      Tags:
+        - Key: Name
+          Value: g1-db-subnet-group
+
+  # RDS MySQL Instance
+  MyDBInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties:
+      AllocatedStorage: '20'
+      DBInstanceClass: db.t3.micro
+      DBInstanceIdentifier: g1-mysql-db
+      DBName: g1projectdb
+      Engine: mysql
+      EngineVersion: '8.0'
+      MasterUsername: dbadmin
+      MasterUserPassword: 'G1Project' # Change this immediately before deploying
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref SecurityGroup
+      PubliclyAccessible: true # Set to true because your subnets are public and you need dev PC access
+      DeleteAutomatedBackups: true
+      Tags:
+        - Key: Name
+          Value: G1MySQLInstance
