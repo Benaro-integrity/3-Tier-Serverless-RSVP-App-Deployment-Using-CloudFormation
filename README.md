@@ -8,7 +8,7 @@ This template file provisions this infrastructure by;
 2. Creates three subnets
 3. Creates a route table
 4. Associates the route table with the three subnets
-5. Create an internet gateway and associates it with the route table making the all the subnets public
+5. Create an internet gateway and associates it with the route table making all the subnets public
 6. Creates a security group with two rules. First one to allow all traffic from our development PC to the RDS and second rule to allow resources in this security group to access the RDS on port 3306
 7. Creates a DB subnet group and associate subnets with it.
 8. Provision an RDS MySQL instance (db.t3.micro) in our defined custom VPC and the DB Subnet group. Turn on Publicly accessible.
